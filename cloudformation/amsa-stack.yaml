@@ -1,0 +1,290 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 instance for Amsa Frontend and Backend with Monitoring
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair for SSH access
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+    Description: EC2 instance type
+
+Resources:
+  AmsaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH, HTTP, and Backend API
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3001
+          ToPort: 3001
+          CidrIp: 0.0.0.0/0
+
+  AmsaEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      ImageId: ami-080e1f13689e07408  # Ubuntu 22.04
+      SecurityGroupIds:
+        - !Ref AmsaSecurityGroup
+      Tags:
+        - Key: Name
+          Value: "Amsa-EC2-Instance"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Update and upgrade system
+          sudo apt update -y && sudo apt upgrade -y
+
+          # Install required packages
+          sudo apt install -y git curl unzip nginx
+
+          # Install Node.js 20 and npm
+          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+          sudo apt install -y nodejs
+
+          # Verify installations
+          node -v
+          npm -v
+          nginx -v
+
+          # Install global npm packages (normal + sudo to ensure both environments work)
+          sudo npm install -g pm2
+          sudo npm install -g serve
+          npm install -g pm2 serve amazon-cloudwatch-agent
+          
+
+          # Verify pm2 installation
+          pm2 -v
+
+          # Prepare frontend directory
+          sudo mkdir -p /var/www/amsa-fe
+
+          # Configure Nginx for Frontend + Backend API
+          cat <<EOF | sudo tee /etc/nginx/sites-available/amsa
+          server {
+              listen 80;
+              server_name _;
+
+              root /var/www/amsa-fe;
+              index index.html;
+
+              location / {
+                  try_files \$uri /index.html;
+              }
+
+              location /api {
+                  proxy_pass http://localhost:3001;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host \$host;
+                  proxy_cache_bypass \$http_upgrade;
+              }
+          }
+          EOF
+
+          # Enable and restart Nginx
+          sudo ln -s /etc/nginx/sites-available/amsa /etc/nginx/sites-enabled/
+          sudo rm -f /etc/nginx/sites-enabled/default
+          sudo nginx -t && sudo systemctl restart nginx && sudo systemctl enable nginx
+
+          # --- Configure CloudWatch Agent ---
+          sudo mkdir -p /opt/aws/amazon-cloudwatch-agent/bin
+          cat <<CWCFG | sudo tee /opt/aws/amazon-cloudwatch-agent/bin/config.json
+          {
+            "metrics": {
+              "metrics_collected": {
+                "cpu": {
+                  "measurement": ["usage_idle","usage_user","usage_system"],
+                  "metrics_collection_interval": 60
+                },
+                "mem": {
+                  "measurement": ["mem_used_percent"],
+                  "metrics_collection_interval": 60
+                },
+                "disk": {
+                  "measurement": ["used_percent"],
+                  "resources": ["/"],
+                  "metrics_collection_interval": 60
+                },
+                "procstat": {
+                  "measurement": ["pid_count"],
+                  "metrics_collection_interval": 60,
+                  "process_name": "server.js"
+                }
+              }
+            }
+          }
+          CWCFG
+          sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json -s
+
+
+  # --- SNS Topic for CloudWatch Alarms ---
+  AmsaAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "Amsa Monitoring Alerts"
+      TopicName: "AmsaMonitoringAlerts"
+
+  AmsaAlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: "prathamesh.pandhare@alphaseam.com"  # Replace with your email
+      TopicArn: !Ref AmsaAlarmTopic
+
+  # --- CPU Alarm ---
+  AmsaCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: "Amsa-CPU-High"
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AmsaAlarmTopic
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref AmsaEC2Instance
+
+  # --- Memory Alarm ---
+  AmsaMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: "Amsa-Memory-High"
+      MetricName: mem_used_percent
+      Namespace: CWAgent
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 75
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AmsaAlarmTopic
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref AmsaEC2Instance
+
+  # --- Disk Alarm ---
+  AmsaDiskAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: "Amsa-Disk-High"
+      MetricName: disk_used_percent
+      Namespace: CWAgent
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AmsaAlarmTopic
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref AmsaEC2Instance
+        - Name: path
+          Value: "/"
+# --- CloudWatch Dashboard ---
+  AmsaDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: "AmsaMonitoringDashboard"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "CPU Utilization",
+                "metrics": [
+                  [ "AWS/EC2", "CPUUtilization", "InstanceId", "${AmsaEC2Instance}" ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Memory Usage (%)",
+                "metrics": [
+                  [ "CWAgent", "mem_used_percent", "InstanceId", "${AmsaEC2Instance}" ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 12,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Disk Usage (%)",
+                "metrics": [
+                  [ "CWAgent", "disk_used_percent", "InstanceId", "${AmsaEC2Instance}", "path", "/" ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 18,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Node.js Process (server.js) Running",
+                "metrics": [
+                  [ "CWAgent", "procstat_pid_count", "process_name", "server.js", "InstanceId", "${AmsaEC2Instance}" ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  PublicIP:
+    Description: Public IP of EC2
+    Value: !GetAtt AmsaEC2Instance.PublicIp
+  PublicDNS:
+    Description: Public DNS of EC2
+    Value: !GetAtt AmsaEC2Instance.PublicDnsName
+  AlarmTopic:
+    Description: SNS Topic ARN for monitoring alerts
+    Value: !Ref AmsaAlarmTopic

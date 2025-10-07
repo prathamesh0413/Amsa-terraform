@@ -1,0 +1,244 @@
+/* ================= Base Header ================= */
+.header {
+  position: fixed;
+  inset: 0 auto auto 0;
+  width: 100%;
+  z-index: 1000;
+  font-family: 'Poppins', sans-serif;
+  transition: background 0.3s ease, padding 0.3s ease, box-shadow 0.3s ease, border-bottom 0.3s ease;
+  padding: 1rem 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+}
+ 
+.container {
+  max-width: 1300px;
+  width: 90%;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+ 
+/* Scrolled or Menu Open State */
+.scrolled,
+.menuOpen {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  padding: 0.6rem 0;
+}
+ 
+/* Logo */
+.logoImg {
+  height: 45px;
+  width: auto;
+  transition: height 0.3s ease;
+}
+.scrolled .logoImg,
+.menuOpen .logoImg {
+  height: 40px;
+}
+ 
+/* ================= Desktop Navigation ================= */
+.nav {
+  display: flex;
+  align-items: center;
+}
+ 
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 2.2rem;
+  transition: gap 0.3s ease;
+}
+ 
+.navLink {
+  position: relative;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 1rem;
+  color: #e2e8f0;
+  transition: color 0.3s ease, font-size 0.3s ease;
+  padding: 0.3rem 0;
+  white-space: nowrap;
+}
+ 
+.scrolled .navLink,
+.menuOpen .navLink {
+  color: #1a202c;
+}
+ 
+.navLink:hover {
+  color: #00A3FF;
+}
+ 
+.navLink::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: #00A3FF;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease;
+}
+.navLink:hover::after,
+.active.navLink::after {
+  transform: scaleX(1);
+}
+ 
+/* CTA Button */
+.ctaButton {
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #fff !important;
+  padding: 0.55rem 1.3rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #007BFF, #00C6FF);
+  box-shadow: 0 6px 16px rgba(0, 123, 255, 0.25);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, padding 0.3s ease;
+  white-space: nowrap;
+}
+.ctaButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 123, 255, 0.35);
+}
+ 
+/* ================= Hamburger Icon ================= */
+.menuIcon {
+  display: none;
+  cursor: pointer;
+  width: 28px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  position: relative;
+  z-index: 1001;
+}
+ 
+.bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 3px;
+  transition: transform 0.35s ease, opacity 0.25s ease, background 0.3s ease;
+  background: #ffffff;
+}
+.bar1 {
+  top: 0;
+}
+.bar2 {
+  top: 9.5px;
+}
+.bar3 {
+  bottom: 0;
+}
+ 
+.scrolled .bar,
+.menuOpen .bar {
+  background: #1a1a1a;
+}
+ 
+.menuOpen .bar1 {
+  transform: translateY(9.5px) rotate(45deg);
+}
+.menuOpen .bar2 {
+  opacity: 0;
+}
+.menuOpen .bar3 {
+  transform: translateY(-9.5px) rotate(-45deg);
+}
+ 
+/* ================= Mobile Navigation ================= */
+@media (max-width: 1024px) {
+  .nav {
+    display: none;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-20px);
+    transition: opacity 0.35s ease, transform 0.35s ease, visibility 0.35s ease;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+ 
+  .nav.open {
+    display: flex;
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+ 
+  .navLinks {
+    flex-direction: column;
+    gap: 2rem;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+  }
+ 
+  .navLink,
+  .ctaButton {
+    font-size: 1.5rem;
+    color: #1a202c;
+    font-weight: 600;
+    text-align: center;
+  }
+ 
+  .menuIcon {
+    display: block;
+  }
+ 
+  /* Optional dark overlay for better separation */
+  .nav.open::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.15);
+    z-index: -1;
+  }
+}
+ 
+/* ================= Tablet & Mobile Tweaks ================= */
+@media (max-width: 1200px) {
+  .navLinks {
+    gap: 1.5rem;
+  }
+  .navLink {
+    font-size: 0.95rem;
+  }
+  .ctaButton {
+    padding: 0.5rem 1.1rem;
+  }
+}
+ 
+@media (max-width: 480px) {
+  .container {
+    padding: 0 1.25rem;
+  }
+  .navLink,
+  .ctaButton {
+    font-size: 1.3rem;
+  }
+}
+ 

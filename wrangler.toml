@@ -1,0 +1,14 @@
+ 
+# The name of your Cloudflare Pages project (set this to match your project in Cloudflare dashboard)
+name = "amsa"
+ 
+# Directory containing the build output
+pages_build_output_dir = "out"
+ 
+# Compatibility flags for Next.js (optional, but recommended for modern Next.js apps)
+compatibility_date = "2025-09-02"
+compatibility_flags = ["nodejs_compat"]
+ 
+# Optional: Environment configuration
+[env.production]
+# You can add secrets or environment variables if needed later

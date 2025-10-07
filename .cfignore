@@ -1,0 +1,10 @@
+# Ignore Next.js build cache
+.next/cache
+.next/**/*.pack
+
+# Ignore root cache (if ever created)
+cache
+cache/**
+
+# Ignore node_modules (never deploy these)
+node_modules
