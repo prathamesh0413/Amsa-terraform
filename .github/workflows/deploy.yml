@@ -107,4 +107,4 @@ jobs:
 
     # 🔟 Output success message
     - name: Deployment Complete
-      run: echo "✅ Amsa Deployment Complete! Visit http://${{ env.EC2_HOST }}"   
+      run: echo "✅ Amsa Deployment Complete! Visit http://${{ env.EC2_HOST }}"    
