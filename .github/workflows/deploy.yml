@@ -65,26 +65,33 @@ jobs:
       run: |
         ssh -i amsa_key.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
           set -e
+          sudo apt update -y
+          sudo apt install -y curl
+          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+          sudo apt install -y nodejs
+          sudo npm install -g pm2
+          
           if [ ! -d "/home/ubuntu/backend-amsa" ]; then
             git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/backend-amsa
           fi
-          cd /home/ubuntu/backend-amsa
+          
+          cd /home/ubuntu/backend-amsa/backend-amsa
           git pull origin main
-          cd backend-amsa
           npm install --legacy-peer-deps
           pm2 restart amsa-backend || pm2 start server.js --name amsa-backend --watch
           pm2 save
         EOF
 
-    # 9️⃣ Deploy Frontend (assuming it’s in /frontend folder in repo)
+    # 9️⃣ Deploy Frontend
     - name: Deploy Frontend
       run: |
         ssh -i amsa_key.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
           set -e
-          cd /var/www
-          if [ ! -d "amsa-fe" ]; then
-            mkdir -p amsa-fe
-          fi
+          sudo apt update -y
+          sudo apt install -y nginx curl
+          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+          sudo apt install -y nodejs
+          
           cd /home/ubuntu
           if [ ! -d "/home/ubuntu/Amsa-frontend" ]; then
             git clone https://github.com/prathamesh0413/Amsa-frontend.git
@@ -93,10 +100,11 @@ jobs:
           git pull origin main
           npm install
           npm run build
+          sudo mkdir -p /var/www/amsa-fe
           sudo cp -r out/* /var/www/amsa-fe/
           sudo systemctl restart nginx
         EOF
 
     # 🔟 Output success message
     - name: Deployment Complete
-      run: echo "✅ Amsa Deployment Complete! Visit http://${{ env.EC2_HOST }}"  
+      run: echo "✅ Amsa Deployment Complete! Visit http://${{ env.EC2_HOST }}"
