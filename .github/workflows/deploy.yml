@@ -124,19 +124,19 @@ jobs:
             pm2 save
             echo "✅ Backend deployed successfully!"
 
-            # --- Frontend Deployment ---
-            echo "📦 Deploying Frontend..."
-            cd /home/ubuntu/Amsa-terraform
-            npm install --legacy-peer-deps
-            npm run build
-            NEXT_DISABLE_ESLINT=1 NEXT_DISABLE_TYPE_CHECK=1 npm run build
-            npm run export || true
-            sudo rm -rf /var/www/amsa-fe
-            sudo mkdir -p /var/www/amsa-fe
-            sudo cp -r out/* /var/www/amsa-fe/
+            # # --- Frontend Deployment ---
+            # echo "📦 Deploying Frontend..."
+            # cd /home/ubuntu/Amsa-terraform
+            # npm install --legacy-peer-deps
+            # npm run build
+            # NEXT_DISABLE_ESLINT=1 NEXT_DISABLE_TYPE_CHECK=1 npm run build
+            # npm run export || true
+            # sudo rm -rf /var/www/amsa-fe
+            # sudo mkdir -p /var/www/amsa-fe
+            # sudo cp -r out/* /var/www/amsa-fe/
 
-            # --- Nginx Reload ---
-            sudo nginx -t
-            sudo systemctl restart nginx
+            # # --- Nginx Reload ---
+            # sudo nginx -t
+            # sudo systemctl restart nginx
 
-            echo "✅ Deployment complete for Amsa Frontend + Backend!"
+            # echo "✅ Deployment complete for Amsa Frontend + Backend!"
