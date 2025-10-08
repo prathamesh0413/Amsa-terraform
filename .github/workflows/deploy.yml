@@ -49,7 +49,7 @@ jobs:
           echo "✅ EC2 instance IP: $IP"
 
       # 6️⃣ Install SSH client & rsync
-      - name: Install SSH Client
+      - name: Install SSH Client & Rsync
         run: sudo apt-get install -y openssh-client rsync
 
       # 7️⃣ Add SSH key and set permissions
@@ -60,58 +60,56 @@ jobs:
           mkdir -p ~/.ssh
           echo "StrictHostKeyChecking no" >> ~/.ssh/config
 
-      # 8️⃣ Deploy Backend & Frontend safely
+      # 8️⃣ Deploy Backend & Frontend
       - name: Deploy Backend & Frontend
         run: |
-          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -tt -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
-            set -e
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -tt -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << EOF
+set -e
 
-            # ---- Wait for apt locks ----
-            echo "🧹 Waiting for any apt locks..."
-            while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
-                  sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
-                  sudo fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
-                echo "Waiting for another apt process to finish..."
-                sleep 5
-            done
+echo "🧹 Waiting for apt locks to be free..."
+while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
+      sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
+      sudo fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
+    echo "Waiting for another apt process to finish..."
+    sleep 5
+done
 
-            # ---- Update system & install packages ----
-            echo "📦 Updating system and installing dependencies..."
-            sudo apt-get update -y
-            sudo apt-get install -y curl git nginx rsync
+echo "📦 Updating system packages..."
+sudo apt-get update -y
+sudo apt-get install -y curl git nginx rsync
 
-            # ---- Node.js & PM2 ----
-            if ! command -v node >/dev/null 2>&1; then
-                curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-                sudo apt-get install -y nodejs
-                sudo npm install -g pm2
-            fi
+echo "📦 Installing Node.js & PM2 if missing..."
+if ! command -v node >/dev/null 2>&1; then
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+    sudo npm install -g pm2
+fi
 
-            # ---- Clone repo if not exists ----
-            if [ ! -d "/home/ubuntu/Amsa-terraform" ]; then
-                git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/Amsa-terraform
-            fi
+# Clone repo if it doesn't exist
+if [ ! -d "/home/ubuntu/Amsa-terraform" ]; then
+    git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/Amsa-terraform
+fi
 
-            cd /home/ubuntu/Amsa-terraform
-            git pull origin main
+cd /home/ubuntu/Amsa-terraform
+git pull origin main
 
-            # ---- Backend Deployment ----
-            echo "📦 Deploying Backend..."
-            cd backend-amsa
-            npm install --legacy-peer-deps 2>&1 | tee npm-install-backend.log
-            pm2 restart amsa-backend || pm2 start server.js --name amsa-backend --watch
-            pm2 save
-            echo "✅ Backend deployed successfully!"
+# ---- Backend Deployment ----
+echo "📦 Deploying Backend..."
+cd backend-amsa
+npm install --legacy-peer-deps 2>&1 | tee npm-install-backend.log
+pm2 restart amsa-backend || pm2 start server.js --name amsa-backend --watch
+pm2 save
+echo "✅ Backend deployed successfully!"
 
-            # ---- Frontend Deployment ----
-            echo "📦 Deploying Frontend..."
-            cd /home/ubuntu/Amsa-terraform
-            npm install --legacy-peer-deps 2>&1 | tee npm-install-frontend.log
-            npm run build 2>&1 | tee build.log
-            sudo mkdir -p /var/www/amsa-fe
-            sudo rsync -av --delete out/ /var/www/amsa-fe/
-            sudo systemctl restart nginx
-            echo "✅ Frontend deployed successfully!"
+# ---- Frontend Deployment ----
+echo "📦 Deploying Frontend..."
+cd /home/ubuntu/Amsa-terraform
+npm install --legacy-peer-deps 2>&1 | tee npm-install-frontend.log
+npm run build 2>&1 | tee build.log
+sudo mkdir -p /var/www/amsa-fe
+sudo rsync -av --delete out/ /var/www/amsa-fe/
+sudo systemctl restart nginx
+echo "✅ Frontend deployed successfully!"
 EOF
 
       # 🔟 Output success message
