@@ -102,11 +102,12 @@ jobs:
             pm2 restart amsa-backend || pm2 start server.js --name amsa-backend --watch
             pm2 save
 
-            # Deploy frontend safely
+            # Deploy frontend safely (foreground build)
             cd /home/ubuntu/Amsa-terraform
             npm install --legacy-peer-deps
-            nohup npm run build > build.log 2>&1 &
-            wait
+
+            echo "🚀 Building frontend..."
+            npm run build > build.log 2>&1
 
             sudo mkdir -p /var/www/amsa-fe
             sudo rsync -av --delete out/ /var/www/amsa-fe/
