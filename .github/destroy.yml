@@ -1,7 +1,8 @@
 name: Terraform Destroy (Amsa)
 
+# Allows manual trigger from GitHub UI
 on:
-  workflow_dispatch:   # allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   destroy:
@@ -10,7 +11,7 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
 
     steps:
-      # 1️⃣ Checkout Repository
+      # 1️⃣ Checkout repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -31,9 +32,15 @@ jobs:
       # 4️⃣ Terraform Init
       - name: Terraform Init
         working-directory: terraform
-        run: terraform init   
+        run: terraform init
 
       # 5️⃣ Terraform Destroy
       - name: Terraform Destroy
         working-directory: terraform
-        run: terraform destroy -auto-approve -var-file="terraform.tfvars"
+        run: |
+          echo "✅ Destroying Terraform resources..."
+          terraform destroy -auto-approve -var-file="terraform.tfvars"
+
+      # 6️⃣ Success message
+      - name: Destroy Complete
+        run: echo "✅ All Terraform resources have been destroyed."
