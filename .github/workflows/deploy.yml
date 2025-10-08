@@ -48,11 +48,11 @@ jobs:
           echo "EC2_HOST=$IP" >> $GITHUB_ENV
           echo "✅ EC2 instance IP: $IP"
 
-      # 6️⃣ Install SSH client and rsync
+      # 6️⃣ Install SSH client & rsync
       - name: Install SSH Client
         run: sudo apt-get install -y openssh-client rsync
 
-      # 7️⃣ Setup SSH Key
+      # 7️⃣ Add SSH key and set permissions
       - name: Setup SSH Key
         run: |
           echo "${{ secrets.EC2_SSH_KEY }}" > sumit-mumbai-keypair.pem
@@ -60,26 +60,34 @@ jobs:
           mkdir -p ~/.ssh
           echo "StrictHostKeyChecking no" >> ~/.ssh/config
 
-      # 8️⃣ Deploy Backend & Frontend
+      # 8️⃣ Deploy Backend & Frontend safely
       - name: Deploy Backend & Frontend
         run: |
           ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -tt -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
             set -e
 
-            echo "🧹 Updating and preparing system..."
+            echo "🧹 Waiting for apt locks to be free..."
+            while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
+                  sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
+                  sudo fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
+                echo "Waiting for another apt process to finish..."
+                sleep 5
+            done
+
+            echo "📦 Updating system packages..."
             sudo apt-get update -y
             sudo apt-get install -y curl git nginx rsync
 
-            # Node.js & PM2 install
+            echo "📦 Installing Node.js & PM2 if missing..."
             if ! command -v node >/dev/null 2>&1; then
-              curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-              sudo apt-get install -y nodejs
-              sudo npm install -g pm2
+                curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+                sudo apt-get install -y nodejs
+                sudo npm install -g pm2
             fi
 
             # Clone repo if it doesn't exist
             if [ ! -d "/home/ubuntu/Amsa-terraform" ]; then
-              git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/Amsa-terraform
+                git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/Amsa-terraform
             fi
 
             cd /home/ubuntu/Amsa-terraform
@@ -102,8 +110,7 @@ jobs:
             sudo rsync -av --delete out/ /var/www/amsa-fe/
             sudo systemctl restart nginx
             echo "✅ Frontend deployed successfully!"
-
-          EOF
+EOF
 
       # 🔟 Output success message
       - name: Deployment Complete
