@@ -60,45 +60,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "StrictHostKeyChecking no" >> ~/.ssh/config
 
-      # 8️⃣ Deploy Backend
-      - name: Deploy Backend
-        run: |
-          ssh -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
-            set -e
-
-            echo "🧹 Cleaning any APT locks..."
-            sudo rm -rf /var/lib/apt/lists/lock /var/lib/dpkg/lock* /var/cache/apt/archives/lock
-            sudo mkdir -p /var/lib/apt/lists/partial
-
-            # Wait for apt lock to be free
-            while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
-              echo "Waiting for apt lock..."
-              sleep 5
-            done
-
-            # Install Node.js and pm2 if not installed
-            if ! command -v node >/dev/null 2>&1; then
-              sudo apt-get update -y
-              sudo apt-get install -y curl
-              curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-              sudo apt-get install -y nodejs
-              sudo npm install -g pm2
-            fi
-
-            # Deploy backend
-            if [ ! -d "/home/ubuntu/backend-amsa" ]; then
-              git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/backend-amsa
-            fi
-
-            cd /home/ubuntu/backend-amsa/backend-amsa
-            git pull origin main
-            npm install --legacy-peer-deps
-            pm2 restart amsa-backend || pm2 start server.js --name amsa-backend --watch
-            pm2 save
-          EOF
-
-      # 9️⃣ Deploy Frontend
-      - name: Deploy Frontend
+      # 8️⃣ Deploy Backend & Frontend
+      - name: Deploy Backend & Frontend
         run: |
           ssh -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
             set -e
@@ -112,28 +75,39 @@ jobs:
               sleep 5
             done
 
-            # Install Nginx and Node.js if not installed
+            # Install Node.js, PM2, Nginx if not installed
             if ! command -v node >/dev/null 2>&1; then
               sudo apt-get update -y
-              sudo apt-get install -y nginx curl
+              sudo apt-get install -y curl nginx
               curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
               sudo apt-get install -y nodejs
+              sudo npm install -g pm2
             fi
 
-            # Deploy frontend
-            cd /home/ubuntu
-            if [ ! -d "/home/ubuntu/Amsa-frontend" ]; then
-              git clone https://github.com/prathamesh0413/Amsa-frontend.git
+            # Clone repo if not exists
+            if [ ! -d "/home/ubuntu/backend-amsa" ]; then
+              git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/backend-amsa
             fi
-            cd Amsa-frontend
+
+            cd /home/ubuntu/backend-amsa/backend-amsa
             git pull origin main
+
+            # Deploy backend
+            npm install --legacy-peer-deps
+            pm2 restart amsa-backend || pm2 start server.js --name amsa-backend --watch
+            pm2 save
+
+            # Deploy frontend
+            cd frontend
             npm install
             npm run build
             sudo mkdir -p /var/www/amsa-fe
             sudo cp -r out/* /var/www/amsa-fe/
             sudo systemctl restart nginx
+
+            echo "✅ Backend & Frontend deployed successfully!"
           EOF
 
-      # 🔟 Output success message
+      # 9️⃣ Output success message
       - name: Deployment Complete
         run: echo "✅ Amsa Deployment Complete! Visit http://${{ env.EC2_HOST }}"
