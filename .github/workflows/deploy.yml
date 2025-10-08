@@ -66,7 +66,8 @@ jobs:
           ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -tt -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
             set -e
 
-            echo "🧹 Waiting for apt locks to be free..."
+            # ---- Wait for apt locks ----
+            echo "🧹 Waiting for any apt locks..."
             while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
                   sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
                   sudo fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
@@ -74,18 +75,19 @@ jobs:
                 sleep 5
             done
 
-            echo "📦 Updating system packages..."
+            # ---- Update system & install packages ----
+            echo "📦 Updating system and installing dependencies..."
             sudo apt-get update -y
             sudo apt-get install -y curl git nginx rsync
 
-            echo "📦 Installing Node.js & PM2 if missing..."
+            # ---- Node.js & PM2 ----
             if ! command -v node >/dev/null 2>&1; then
                 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
                 sudo apt-get install -y nodejs
                 sudo npm install -g pm2
             fi
 
-            # Clone repo if it doesn't exist
+            # ---- Clone repo if not exists ----
             if [ ! -d "/home/ubuntu/Amsa-terraform" ]; then
                 git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/Amsa-terraform
             fi
