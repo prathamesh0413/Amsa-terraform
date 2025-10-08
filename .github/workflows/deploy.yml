@@ -39,7 +39,7 @@ jobs:
         working-directory: terraform
         run: terraform apply -auto-approve -var-file="terraform.tfvars"
 
-      # 5️⃣ Get EC2 Public IP from Terraform output
+      # 5️⃣ Get EC2 Public IP
       - name: Get EC2 Public IP
         id: get_ip
         working-directory: terraform
@@ -52,7 +52,7 @@ jobs:
       - name: Install SSH Client
         run: sudo apt-get install -y openssh-client
 
-      # 7️⃣ Add SSH key and set permissions
+      # 7️⃣ Add SSH key
       - name: Setup SSH Key
         run: |
           echo "${{ secrets.EC2_SSH_KEY }}" > sumit-mumbai-keypair.pem
@@ -66,39 +66,37 @@ jobs:
           ssh -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
             set -e
 
-            echo "🧹 Cleaning APT locks..."
-            sudo rm -rf /var/lib/apt/lists/lock /var/lib/dpkg/lock* /var/cache/apt/archives/lock
+            echo "🧹 Cleaning APT locks and cache..."
+            sudo rm -rf /var/lib/apt/lists/* /var/lib/dpkg/lock* /var/cache/apt/archives/lock
             sudo mkdir -p /var/lib/apt/lists/partial
+            sudo dpkg --configure -a || true
+            sudo apt-get clean
+            sudo apt-get update -y
 
-            while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
-              echo "Waiting for apt lock..."
-              sleep 5
-            done
-
-            # Install Node.js, PM2, Nginx if not installed
+            echo "📦 Installing Node.js, PM2, Nginx if not installed..."
             if ! command -v node >/dev/null 2>&1; then
-              sudo apt-get update -y
-              sudo apt-get install -y curl nginx
+              sudo apt-get install -y curl nginx git
               curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
               sudo apt-get install -y nodejs
               sudo npm install -g pm2
             fi
 
             # Clone repo if not exists
-            if [ ! -d "/home/ubuntu/backend-amsa" ]; then
-              git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/backend-amsa
+            if [ ! -d "/home/ubuntu/Amsa-terraform" ]; then
+              git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/Amsa-terraform
             fi
 
-            cd /home/ubuntu/backend-amsa/backend-amsa
+            cd /home/ubuntu/Amsa-terraform
             git pull origin main
 
             # Deploy backend
+            cd backend-amsa
             npm install --legacy-peer-deps
             pm2 restart amsa-backend || pm2 start server.js --name amsa-backend --watch
             pm2 save
 
-            # Deploy frontend
-            cd frontend
+            # Deploy frontend (directly in repo root)
+            cd /home/ubuntu/Amsa-terraform
             npm install
             npm run build
             sudo mkdir -p /var/www/amsa-fe
@@ -108,6 +106,6 @@ jobs:
             echo "✅ Backend & Frontend deployed successfully!"
           EOF
 
-      # 9️⃣ Output success message
+      # 9️⃣ Deployment success message
       - name: Deployment Complete
         run: echo "✅ Amsa Deployment Complete! Visit http://${{ env.EC2_HOST }}"
