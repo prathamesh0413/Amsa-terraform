@@ -39,7 +39,7 @@ jobs:
         working-directory: terraform
         run: terraform apply -auto-approve -var-file="terraform.tfvars"
 
-      # 5️⃣ Get EC2 Public IP
+      # 5️⃣ Get EC2 Public IP from Terraform output
       - name: Get EC2 Public IP
         id: get_ip
         working-directory: terraform
@@ -52,7 +52,7 @@ jobs:
       - name: Install SSH Client
         run: sudo apt-get install -y openssh-client
 
-      # 7️⃣ Add SSH key
+      # 7️⃣ Add SSH key and set permissions
       - name: Setup SSH Key
         run: |
           echo "${{ secrets.EC2_SSH_KEY }}" > sumit-mumbai-keypair.pem
@@ -66,14 +66,21 @@ jobs:
           ssh -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
             set -e
 
-            echo "🧹 Cleaning APT locks and cache..."
+            echo "🧹 Cleaning APT locks and waiting for other apt processes..."
             sudo rm -rf /var/lib/apt/lists/* /var/lib/dpkg/lock* /var/cache/apt/archives/lock
             sudo mkdir -p /var/lib/apt/lists/partial
             sudo dpkg --configure -a || true
             sudo apt-get clean
+
+            # Wait for any other apt process to finish
+            while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 || sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || sudo fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
+              echo "Waiting for another apt process to finish..."
+              sleep 5
+            done
+
             sudo apt-get update -y
 
-            echo "📦 Installing Node.js, PM2, Nginx if not installed..."
+            echo "📦 Installing Node.js, PM2, Nginx, Git if not installed..."
             if ! command -v node >/dev/null 2>&1; then
               sudo apt-get install -y curl nginx git
               curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
@@ -106,6 +113,6 @@ jobs:
             echo "✅ Backend & Frontend deployed successfully!"
           EOF
 
-      # 9️⃣ Deployment success message
+      # 🔟 Output success message
       - name: Deployment Complete
         run: echo "✅ Amsa Deployment Complete! Visit http://${{ env.EC2_HOST }}"
