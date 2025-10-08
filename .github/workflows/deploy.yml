@@ -60,59 +60,61 @@ jobs:
           mkdir -p ~/.ssh
           echo "StrictHostKeyChecking no" >> ~/.ssh/config
 
-      # 8️⃣ Deploy Backend & Frontend (without set -e)
+      # 8️⃣ Deploy Backend & Frontend
       - name: Deploy Backend & Frontend
         run: |
-          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -tt -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} bash -s << 'ENDSSH'
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -tt -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'ENDSSH'
 
-echo "🧹 Waiting for apt locks to be free..."
-timeout=60
-while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
-      sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
-      sudo fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
-    echo "Waiting for another apt process to finish..."
-    sleep 2
-    ((timeout--))
-    if [ $timeout -le 0 ]; then
-        echo "⚠️ Timeout waiting for apt locks, proceeding anyway..."
-        break
-    fi
-done
+          echo "🧹 Waiting for apt locks to be free..."
+          timeout=60
+          while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
+                sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
+                sudo fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
+              echo "Waiting for another apt process to finish..."
+              sleep 2
+              ((timeout--))
+              if [ $timeout -le 0 ]; then
+                  echo "⚠️ Timeout waiting for apt locks, proceeding anyway..."
+                  break
+              fi
+          done
 
-sudo apt-get update -y || true
-sudo apt-get install -y curl git nginx rsync || true
+          echo "📦 Updating system..."
+          sudo apt-get update -y || true
+          sudo apt-get install -y curl git nginx rsync || true
 
-if ! command -v node >/dev/null 2>&1; then
-    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-    sudo npm install -g pm2
-fi
+          echo "📦 Installing Node.js & PM2 if missing..."
+          if ! command -v node >/dev/null 2>&1; then
+              curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+              sudo npm install -g pm2
+          fi
 
-if [ ! -d "/home/ubuntu/Amsa-terraform" ]; then
-    git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/Amsa-terraform
-fi
+          if [ ! -d "/home/ubuntu/Amsa-terraform" ]; then
+              git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/Amsa-terraform
+          fi
 
-cd /home/ubuntu/Amsa-terraform
-git reset --hard
-git pull origin main
+          cd /home/ubuntu/Amsa-terraform
+          git reset --hard
+          git pull origin main
 
-echo "📦 Deploying Backend..."
-cd backend-amsa
-npm install --legacy-peer-deps 2>&1 | tee npm-install-backend.log
-pm2 restart amsa-backend || pm2 start server.js --name amsa-backend --watch
-pm2 save
-echo "✅ Backend deployed successfully!"
+          echo "📦 Deploying Backend..."
+          cd backend-amsa
+          npm install --legacy-peer-deps 2>&1 | tee npm-install-backend.log
+          pm2 restart amsa-backend || pm2 start server.js --name amsa-backend --watch
+          pm2 save
+          echo "✅ Backend deployed successfully!"
 
-echo "📦 Deploying Frontend..."
-cd /home/ubuntu/Amsa-terraform
-npm install --legacy-peer-deps 2>&1 | tee npm-install-frontend.log
-nohup npm run build > build.log 2>&1 &
-wait
-sudo mkdir -p /var/www/amsa-fe
-sudo rsync -av --delete out/ /var/www/amsa-fe/
-sudo systemctl restart nginx
-echo "✅ Frontend deployed successfully!"
-ENDSSH
+          echo "📦 Deploying Frontend..."
+          cd /home/ubuntu/Amsa-terraform
+          npm install --legacy-peer-deps 2>&1 | tee npm-install-frontend.log
+          npm run build 2>&1 | tee build.log
+          sudo mkdir -p /var/www/amsa-fe
+          sudo rsync -av --delete out/ /var/www/amsa-fe/
+          sudo systemctl restart nginx
+          echo "✅ Frontend deployed successfully!"
+
+          ENDSSH
 
       # 9️⃣ Success message
       - name: Deployment Complete
