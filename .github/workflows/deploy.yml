@@ -87,10 +87,7 @@ jobs:
       - name: Build Frontend
         run: |
           npm install --legacy-peer-deps
-          # Disable linting/type check for faster CI
-          NEXT_DISABLE_ESLINT=1 NEXT_DISABLE_TYPE_CHECK=1 npm run build
-          npm run export || true
-
+          
       # -------------------------------
       # Backend Build
       # -------------------------------
@@ -132,6 +129,7 @@ jobs:
             cd /home/ubuntu/Amsa-terraform
             npm install --legacy-peer-deps
             npm run build
+            NEXT_DISABLE_ESLINT=1 NEXT_DISABLE_TYPE_CHECK=1 npm run build
             npm run export || true
             sudo rm -rf /var/www/amsa-fe
             sudo mkdir -p /var/www/amsa-fe
