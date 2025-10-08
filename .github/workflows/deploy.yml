@@ -48,7 +48,7 @@ jobs:
           echo "EC2_HOST=$IP" >> $GITHUB_ENV
           echo "✅ EC2 instance IP: $IP"
 
-      # 6️⃣ Install SSH client
+      # 6️⃣ Install SSH client and rsync
       - name: Install SSH Client
         run: sudo apt-get install -y openssh-client rsync
 
@@ -60,60 +60,37 @@ jobs:
           mkdir -p ~/.ssh
           echo "StrictHostKeyChecking no" >> ~/.ssh/config
 
-      # 8️⃣ Deploy Backend & Frontend safely
-      - name: Deploy Backend & Frontend
+      # 8️⃣ Deploy Backend
+      - name: Deploy Backend
         run: |
-          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -tt -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
             set -e
 
-            echo "🧹 Cleaning APT locks..."
-            sudo rm -rf /var/lib/apt/lists/* /var/lib/dpkg/lock* /var/cache/apt/archives/lock
-            sudo mkdir -p /var/lib/apt/lists/partial
-            sudo dpkg --configure -a || true
-            sudo apt-get clean
-
-            # Wait for any other apt process to finish
-            while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 || sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || sudo fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
-              echo "Waiting for another apt process to finish..."
-              sleep 5
-            done
-
-            sudo apt-get update -y
-
-            echo "📦 Installing Node.js, PM2, Nginx, Git if not installed..."
-            if ! command -v node >/dev/null 2>&1; then
-              sudo apt-get install -y curl git nginx
-              curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-              sudo apt-get install -y nodejs
-              sudo npm install -g pm2
-            fi
-
-            # Clone repo if not exists
-            if [ ! -d "/home/ubuntu/Amsa-terraform" ]; then
-              git clone https://github.com/prathamesh0413/Amsa-terraform.git /home/ubuntu/Amsa-terraform
-            fi
-
-            cd /home/ubuntu/Amsa-terraform
-            git pull origin main
-
-            # Deploy backend
-            cd backend-amsa
-            npm install --legacy-peer-deps
+            echo "📦 Deploying Backend..."
+            cd /home/ubuntu/Amsa-terraform/backend-amsa
+            npm install --legacy-peer-deps 2>&1 | tee npm-install-backend.log
             pm2 restart amsa-backend || pm2 start server.js --name amsa-backend --watch
             pm2 save
 
-            # Deploy frontend safely (foreground build)
-            cd /home/ubuntu/Amsa-terraform
-            npm install --legacy-peer-deps
+            echo "✅ Backend deployed successfully!"
+          EOF
 
-            echo "🚀 Building frontend..."
-            npm run build > build.log 2>&1
+      # 9️⃣ Deploy Frontend
+      - name: Deploy Frontend
+        run: |
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
+            set -e
+
+            echo "📦 Deploying Frontend..."
+            cd /home/ubuntu/Amsa-terraform
+            npm install --legacy-peer-deps 2>&1 | tee npm-install-frontend.log
+            npm run build 2>&1 | tee build.log
 
             sudo mkdir -p /var/www/amsa-fe
             sudo rsync -av --delete out/ /var/www/amsa-fe/
             sudo systemctl restart nginx
 
-            echo "✅ Backend & Frontend deployed successfully!"
+            echo "✅ Frontend deployed successfully!"
           EOF
 
       # 🔟 Output success message
