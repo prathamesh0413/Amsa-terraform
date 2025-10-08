@@ -50,7 +50,7 @@ jobs:
 
       # 6️⃣ Install SSH client
       - name: Install SSH Client
-        run: sudo apt-get install -y openssh-client
+        run: sudo apt-get install -y openssh-client rsync
 
       # 7️⃣ Add SSH key and set permissions
       - name: Setup SSH Key
@@ -60,13 +60,13 @@ jobs:
           mkdir -p ~/.ssh
           echo "StrictHostKeyChecking no" >> ~/.ssh/config
 
-      # 8️⃣ Deploy Backend & Frontend
+      # 8️⃣ Deploy Backend & Frontend safely
       - name: Deploy Backend & Frontend
         run: |
-          ssh -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -tt -i sumit-mumbai-keypair.pem ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
             set -e
 
-            echo "🧹 Cleaning APT locks and waiting for other apt processes..."
+            echo "🧹 Cleaning APT locks..."
             sudo rm -rf /var/lib/apt/lists/* /var/lib/dpkg/lock* /var/cache/apt/archives/lock
             sudo mkdir -p /var/lib/apt/lists/partial
             sudo dpkg --configure -a || true
@@ -82,7 +82,7 @@ jobs:
 
             echo "📦 Installing Node.js, PM2, Nginx, Git if not installed..."
             if ! command -v node >/dev/null 2>&1; then
-              sudo apt-get install -y curl nginx git
+              sudo apt-get install -y curl git nginx
               curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
               sudo apt-get install -y nodejs
               sudo npm install -g pm2
@@ -102,12 +102,14 @@ jobs:
             pm2 restart amsa-backend || pm2 start server.js --name amsa-backend --watch
             pm2 save
 
-            # Deploy frontend (directly in repo root)
+            # Deploy frontend safely
             cd /home/ubuntu/Amsa-terraform
-            npm install
-            npm run build
+            npm install --legacy-peer-deps
+            nohup npm run build > build.log 2>&1 &
+            wait
+
             sudo mkdir -p /var/www/amsa-fe
-            sudo cp -r out/* /var/www/amsa-fe/
+            sudo rsync -av --delete out/ /var/www/amsa-fe/
             sudo systemctl restart nginx
 
             echo "✅ Backend & Frontend deployed successfully!"
